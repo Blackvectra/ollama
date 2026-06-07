@@ -44,6 +44,18 @@ func isolatedTempDir(t *testing.T) string {
 	return t.TempDir()
 }
 
+// requireNonRoot skips tests that rely on POSIX permission enforcement to deny
+// access. The kernel lets root (euid 0) bypass file mode bits, so chmod-based
+// failure simulation (read-only dirs, unreadable files) does not actually deny
+// root. Without this guard these tests fail spuriously in root containers such
+// as Docker images and many CI runners.
+func requireNonRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("test relies on permission enforcement that root bypasses")
+	}
+}
+
 func TestWriteWithBackup(t *testing.T) {
 	tmpDir := isolatedTempDir(t)
 
@@ -274,6 +286,7 @@ func TestWriteWithBackup_FailsIfBackupFails(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission tests unreliable on Windows")
 	}
+	requireNonRoot(t)
 
 	tmpDir := isolatedTempDir(t)
 	path := filepath.Join(tmpDir, "config.json")
@@ -309,6 +322,7 @@ func TestWriteWithBackup_PermissionDenied(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission tests unreliable on Windows")
 	}
+	requireNonRoot(t)
 
 	tmpDir := isolatedTempDir(t)
 
@@ -499,6 +513,7 @@ func TestWriteWithBackup_FileUnreadableButDirWritable(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission tests unreliable on Windows")
 	}
+	requireNonRoot(t)
 
 	tmpDir := isolatedTempDir(t)
 	path := filepath.Join(tmpDir, "unreadable.json")
