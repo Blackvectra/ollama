@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -1792,6 +1793,54 @@ func allowedHostsMiddleware(addr net.Addr) gin.HandlerFunc {
 	}
 }
 
+// apiKeyAuthMiddleware enforces a static Bearer token when OLLAMA_API_KEY is
+// set. When the key is empty the middleware is a no-op, preserving the default
+// open behavior. A small set of unauthenticated paths is exempt so health
+// checks and the static chat page (which a browser navigation cannot send an
+// Authorization header for) still load; the page then sends the key on its
+// fetch() calls to the protected API.
+func apiKeyAuthMiddleware(key string) gin.HandlerFunc {
+	exempt := map[string]bool{
+		"/":            true,
+		"/chat":        true,
+		"/api/version": true,
+	}
+
+	return func(c *gin.Context) {
+		if key == "" {
+			c.Next()
+			return
+		}
+
+		// Always allow CORS preflight through; the browser cannot attach
+		// Authorization headers to an OPTIONS preflight.
+		if c.Request.Method == http.MethodOptions {
+			c.Next()
+			return
+		}
+
+		if exempt[c.Request.URL.Path] {
+			c.Next()
+			return
+		}
+
+		const prefix = "Bearer "
+		header := c.GetHeader("Authorization")
+		provided := ""
+		if strings.HasPrefix(header, prefix) {
+			provided = strings.TrimSpace(header[len(prefix):])
+		}
+
+		// Constant-time comparison to avoid leaking the key via timing.
+		if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(key)) != 1 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: missing or invalid API key"})
+			return
+		}
+
+		c.Next()
+	}
+}
+
 // ChatUIHandler serves the embedded browser chat interface.
 func (s *Server) ChatUIHandler(c *gin.Context) {
 	c.Data(http.StatusOK, "text/html; charset=utf-8", webui.ChatHTML())
@@ -1830,6 +1879,7 @@ func (s *Server) GenerateRoutes(rc *ollama.Registry) (http.Handler, error) {
 	r.Use(
 		cors.New(corsConfig),
 		allowedHostsMiddleware(s.addr),
+		apiKeyAuthMiddleware(envconfig.ApiKey()),
 	)
 
 	// General

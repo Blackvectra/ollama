@@ -173,6 +173,24 @@
       let history = [];
       let streaming = false;
 
+      // Optional API key (only needed when the server runs with OLLAMA_API_KEY).
+      // Stored locally in the browser, never embedded in the served page.
+      function authHeaders(base) {
+        const h = Object.assign({}, base || {});
+        const key = localStorage.getItem("ollama_api_key");
+        if (key) h["Authorization"] = "Bearer " + key;
+        return h;
+      }
+
+      function promptForKey() {
+        const key = window.prompt(
+          "This server requires an access key (OLLAMA_API_KEY). Enter it to continue:",
+          localStorage.getItem("ollama_api_key") || ""
+        );
+        if (key !== null) localStorage.setItem("ollama_api_key", key.trim());
+        return key;
+      }
+
       function escapeHTML(s) {
         return s.replace(/[&<>"']/g, (c) => ({
           "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -236,7 +254,11 @@
 
       async function loadModels() {
         try {
-          const r = await fetch("/v1/models");
+          let r = await fetch("/v1/models", { headers: authHeaders() });
+          if (r.status === 401) {
+            promptForKey();
+            r = await fetch("/v1/models", { headers: authHeaders() });
+          }
           const data = await r.json();
           const models = (data.data || []).map((m) => m.id).sort();
           modelEl.innerHTML = "";
@@ -279,13 +301,20 @@
         try {
           const resp = await fetch("/v1/chat/completions", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: authHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
               model: modelEl.value,
               messages: history,
               stream: true,
             }),
           });
+
+          if (resp.status === 401) {
+            promptForKey();
+            setContent(out, "⚠️ Access key required — please resend your message.");
+            out.classList.remove("cursor");
+            return;
+          }
 
           if (!resp.ok || !resp.body) {
             const errText = await resp.text().catch(() => resp.statusText);

@@ -1244,3 +1244,58 @@ func TestChatUIRoute(t *testing.T) {
 		t.Fatalf("chat UI body missing expected markers (len=%d)", len(body))
 	}
 }
+
+func TestApiKeyAuthMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	const key = "s3cret-key"
+	r := gin.New()
+	r.Use(apiKeyAuthMiddleware(key))
+	r.GET("/chat", func(c *gin.Context) { c.String(http.StatusOK, "ui") })
+	r.GET("/api/version", func(c *gin.Context) { c.String(http.StatusOK, "v") })
+	r.GET("/v1/models", func(c *gin.Context) { c.String(http.StatusOK, "models") })
+
+	do := func(path, auth string) int {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if auth != "" {
+			req.Header.Set("Authorization", auth)
+		}
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	// Exempt paths load without a key (browser navigations can't send Bearer).
+	if code := do("/chat", ""); code != http.StatusOK {
+		t.Errorf("/chat without key: got %d, want 200", code)
+	}
+	if code := do("/api/version", ""); code != http.StatusOK {
+		t.Errorf("/api/version without key: got %d, want 200", code)
+	}
+
+	// Protected path rejects missing / wrong key, accepts the right one.
+	if code := do("/v1/models", ""); code != http.StatusUnauthorized {
+		t.Errorf("/v1/models without key: got %d, want 401", code)
+	}
+	if code := do("/v1/models", "Bearer wrong"); code != http.StatusUnauthorized {
+		t.Errorf("/v1/models wrong key: got %d, want 401", code)
+	}
+	if code := do("/v1/models", "Bearer "+key); code != http.StatusOK {
+		t.Errorf("/v1/models correct key: got %d, want 200", code)
+	}
+}
+
+func TestApiKeyAuthDisabledByDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.Use(apiKeyAuthMiddleware("")) // no key configured
+	r.GET("/v1/models", func(c *gin.Context) { c.String(http.StatusOK, "models") })
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("with no key set, request should pass: got %d, want 200", w.Code)
+	}
+}

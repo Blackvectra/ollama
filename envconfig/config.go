@@ -248,6 +248,11 @@ var (
 	LLMLibrary = String("OLLAMA_LLM_LIBRARY")
 	Editor     = String("OLLAMA_EDITOR")
 
+	// ApiKey, when set, requires every API request to present a matching
+	// "Authorization: Bearer <key>" header. Empty (the default) keeps the
+	// server open, preserving existing behavior.
+	ApiKey = String("OLLAMA_API_KEY")
+
 	CudaVisibleDevices    = String("CUDA_VISIBLE_DEVICES")
 	HipVisibleDevices     = String("HIP_VISIBLE_DEVICES")
 	RocrVisibleDevices    = String("ROCR_VISIBLE_DEVICES")
@@ -332,6 +337,7 @@ func AsMap() map[string]EnvVar {
 		"OLLAMA_NOPRUNE":              {"OLLAMA_NOPRUNE", NoPrune(), "Do not prune model blobs on startup"},
 		"OLLAMA_NUM_PARALLEL":         {"OLLAMA_NUM_PARALLEL", NumParallel(), "Maximum number of parallel requests"},
 		"OLLAMA_ORIGINS":              {"OLLAMA_ORIGINS", AllowedOrigins(), "A comma separated list of allowed origins"},
+		"OLLAMA_API_KEY":              {"OLLAMA_API_KEY", "", "Require this key as a Bearer token on API requests (default: no auth)"},
 		"OLLAMA_SCHED_SPREAD":         {"OLLAMA_SCHED_SPREAD", SchedSpread(), "Always schedule model across all GPUs"},
 		"OLLAMA_CONTEXT_LENGTH":       {"OLLAMA_CONTEXT_LENGTH", ContextLength(), "Context length to use unless otherwise specified (default: 4k/32k/256k based on VRAM)"},
 		"OLLAMA_EDITOR":               {"OLLAMA_EDITOR", Editor(), "Path to editor for interactive prompt editing (Ctrl+G)"},
