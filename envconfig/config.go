@@ -253,6 +253,11 @@ var (
 	// server open, preserving existing behavior.
 	ApiKey = String("OLLAMA_API_KEY")
 
+	// AnthropicApiKey, when set, enables the optional Claude (Anthropic)
+	// passthrough so frontier models like Opus appear alongside local models.
+	// The key stays server-side and is never exposed to browser clients.
+	AnthropicApiKey = String("ANTHROPIC_API_KEY")
+
 	CudaVisibleDevices    = String("CUDA_VISIBLE_DEVICES")
 	HipVisibleDevices     = String("HIP_VISIBLE_DEVICES")
 	RocrVisibleDevices    = String("ROCR_VISIBLE_DEVICES")
@@ -338,6 +343,7 @@ func AsMap() map[string]EnvVar {
 		"OLLAMA_NUM_PARALLEL":         {"OLLAMA_NUM_PARALLEL", NumParallel(), "Maximum number of parallel requests"},
 		"OLLAMA_ORIGINS":              {"OLLAMA_ORIGINS", AllowedOrigins(), "A comma separated list of allowed origins"},
 		"OLLAMA_API_KEY":              {"OLLAMA_API_KEY", "", "Require this key as a Bearer token on API requests (default: no auth)"},
+		"ANTHROPIC_API_KEY":           {"ANTHROPIC_API_KEY", "", "Enable Claude (Anthropic) passthrough models like Opus (default: off)"},
 		"OLLAMA_SCHED_SPREAD":         {"OLLAMA_SCHED_SPREAD", SchedSpread(), "Always schedule model across all GPUs"},
 		"OLLAMA_CONTEXT_LENGTH":       {"OLLAMA_CONTEXT_LENGTH", ContextLength(), "Context length to use unless otherwise specified (default: 4k/32k/256k based on VRAM)"},
 		"OLLAMA_EDITOR":               {"OLLAMA_EDITOR", Editor(), "Path to editor for interactive prompt editing (Ctrl+G)"},

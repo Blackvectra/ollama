@@ -67,3 +67,25 @@ Never expose the raw port directly.
 Everything above keeps your data on your machine. Note that *cloud* models
 (remote inference) and web search send data off your machine by design — set
 `OLLAMA_NO_CLOUD=1` if you want to disable those and stay fully local.
+
+### Optional Claude (Anthropic) passthrough
+
+Setting `ANTHROPIC_API_KEY` makes Claude models (e.g. `claude-opus-4-8`) appear
+in the model list alongside your local models, so you can use a frontier model
+on demand for hard problems while keeping local models as the private default.
+
+```sh
+export ANTHROPIC_API_KEY="sk-ant-..."
+ollama serve
+```
+
+Privacy tradeoff, stated plainly:
+
+- **Local models stay fully private** — those requests never leave your machine.
+- **Only messages you send to a Claude model** go to Anthropic's servers, exactly
+  like using the Claude app or API directly. This is unavoidable: frontier
+  models like Opus only run on Anthropic's servers.
+- The key stays **server-side** — it is read from the environment, never sent to
+  the browser, and never printed in the `ollama serve` environment listing.
+
+Leave `ANTHROPIC_API_KEY` unset to keep the server local-only.

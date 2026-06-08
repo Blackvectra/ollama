@@ -252,7 +252,22 @@
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
+      // Models whose ids come from an external provider (e.g. Claude). Routed
+      // to the server-side proxy instead of the local inference endpoint.
+      const cloudModels = new Set();
+
+      function addOption(group, id, label) {
+        const o = document.createElement("option");
+        o.value = id;
+        o.textContent = label || id;
+        group.appendChild(o);
+      }
+
       async function loadModels() {
+        modelEl.innerHTML = "";
+        cloudModels.clear();
+
+        // Local models via the OpenAI-compatible endpoint.
         try {
           let r = await fetch("/v1/models", { headers: authHeaders() });
           if (r.status === 401) {
@@ -261,24 +276,37 @@
           }
           const data = await r.json();
           const models = (data.data || []).map((m) => m.id).sort();
-          modelEl.innerHTML = "";
-          if (!models.length) {
-            const o = document.createElement("option");
-            o.textContent = "No models — run: ollama pull <model>";
-            o.disabled = true;
-            modelEl.appendChild(o);
-            return;
-          }
-          for (const id of models) {
-            const o = document.createElement("option");
-            o.value = id;
-            o.textContent = id;
-            modelEl.appendChild(o);
+          if (models.length) {
+            const g = document.createElement("optgroup");
+            g.label = "Local (private)";
+            for (const id of models) addOption(g, id);
+            modelEl.appendChild(g);
           }
         } catch (e) {
-          const o = document.createElement("option");
-          o.textContent = "Could not load models";
-          modelEl.appendChild(o);
+          /* fall through; cloud may still be available */
+        }
+
+        // External providers (Claude Opus, etc.) when configured server-side.
+        try {
+          const r = await fetch("/api/providers", { headers: authHeaders() });
+          const data = await r.json();
+          for (const p of data.providers || []) {
+            if (!p.models || !p.models.length) continue;
+            const g = document.createElement("optgroup");
+            g.label = p.name + " (cloud)";
+            for (const id of p.models) {
+              cloudModels.add(id);
+              addOption(g, id);
+            }
+            modelEl.appendChild(g);
+          }
+        } catch (e) {
+          /* providers optional */
+        }
+
+        if (!modelEl.options.length) {
+          addOption(modelEl, "", "No models — run: ollama pull <model>");
+          modelEl.options[0].disabled = true;
         }
       }
 
@@ -299,7 +327,10 @@
         let acc = "";
 
         try {
-          const resp = await fetch("/v1/chat/completions", {
+          const endpoint = cloudModels.has(modelEl.value)
+            ? "/v1/providers/chat/completions"
+            : "/v1/chat/completions";
+          const resp = await fetch(endpoint, {
             method: "POST",
             headers: authHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({

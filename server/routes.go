@@ -1888,6 +1888,10 @@ func (s *Server) GenerateRoutes(rc *ollama.Registry) (http.Handler, error) {
 
 	// Built-in browser chat UI (ChatGPT/Claude-style), served from this server.
 	r.GET("/chat", s.ChatUIHandler)
+
+	// Optional external (cloud) providers — e.g. Claude Opus via ANTHROPIC_API_KEY.
+	r.GET("/api/providers", s.ProvidersHandler)
+	r.POST("/v1/providers/chat/completions", s.ProviderChatHandler)
 	r.HEAD("/api/version", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"version": version.Version}) })
 	r.GET("/api/version", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"version": version.Version}) })
 	r.GET("/api/status", s.StatusHandler)
