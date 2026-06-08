@@ -1833,6 +1833,8 @@ func apiKeyAuthMiddleware(key string) gin.HandlerFunc {
 
 		// Constant-time comparison to avoid leaking the key via timing.
 		if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(key)) != 1 {
+			// Audit trail for intrusion detection; never log the attempted key.
+			slog.Warn("rejected unauthenticated API request", "client", c.ClientIP(), "method", c.Request.Method, "path", c.Request.URL.Path)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized: missing or invalid API key"})
 			return
 		}
@@ -1841,9 +1843,22 @@ func apiKeyAuthMiddleware(key string) gin.HandlerFunc {
 	}
 }
 
-// ChatUIHandler serves the embedded browser chat interface.
+// ChatUIHandler serves the embedded browser chat interface with a per-request
+// CSP nonce so the page's inline script runs under a strict policy (no
+// 'unsafe-inline' for scripts), and external connections are limited to same
+// origin to prevent data exfiltration.
 func (s *Server) ChatUIHandler(c *gin.Context) {
-	c.Data(http.StatusOK, "text/html; charset=utf-8", webui.ChatHTML())
+	nonce := newCSPNonce()
+	csp := "default-src 'none'; " +
+		"script-src 'nonce-" + nonce + "'; " +
+		"style-src 'unsafe-inline'; " +
+		"img-src 'self' data:; " +
+		"connect-src 'self'; " +
+		"base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+	c.Header("Content-Security-Policy", csp)
+
+	page := bytes.ReplaceAll(webui.ChatHTML(), []byte("__CSP_NONCE__"), []byte(nonce))
+	c.Data(http.StatusOK, "text/html; charset=utf-8", page)
 }
 
 func (s *Server) GenerateRoutes(rc *ollama.Registry) (http.Handler, error) {
@@ -1876,9 +1891,16 @@ func (s *Server) GenerateRoutes(rc *ollama.Registry) (http.Handler, error) {
 
 	r := gin.Default()
 	r.HandleMethodNotAllowed = true
+	// Fail closed: don't silently expose an unauthenticated endpoint to the network.
+	if err := enforceSecureBinding(s.addr, envconfig.ApiKey(), envconfig.AllowInsecure()); err != nil {
+		return nil, err
+	}
+
 	r.Use(
 		cors.New(corsConfig),
+		securityHeadersMiddleware(),
 		allowedHostsMiddleware(s.addr),
+		rateLimitMiddleware(envconfig.RateLimit()),
 		apiKeyAuthMiddleware(envconfig.ApiKey()),
 	)
 

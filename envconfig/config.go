@@ -258,6 +258,14 @@ var (
 	// The key stays server-side and is never exposed to browser clients.
 	AnthropicApiKey = String("ANTHROPIC_API_KEY")
 
+	// AllowInsecure permits binding to a non-loopback address without an API
+	// key. The server otherwise refuses to start in that configuration to
+	// avoid silently exposing an unauthenticated endpoint.
+	AllowInsecure = Bool("OLLAMA_ALLOW_INSECURE")
+
+	// RateLimit caps per-client requests per minute. 0 (default) disables it.
+	RateLimit = Uint("OLLAMA_RATE_LIMIT", 0)
+
 	CudaVisibleDevices    = String("CUDA_VISIBLE_DEVICES")
 	HipVisibleDevices     = String("HIP_VISIBLE_DEVICES")
 	RocrVisibleDevices    = String("ROCR_VISIBLE_DEVICES")
@@ -344,6 +352,8 @@ func AsMap() map[string]EnvVar {
 		"OLLAMA_ORIGINS":              {"OLLAMA_ORIGINS", AllowedOrigins(), "A comma separated list of allowed origins"},
 		"OLLAMA_API_KEY":              {"OLLAMA_API_KEY", "", "Require this key as a Bearer token on API requests (default: no auth)"},
 		"ANTHROPIC_API_KEY":           {"ANTHROPIC_API_KEY", "", "Enable Claude (Anthropic) passthrough models like Opus (default: off)"},
+		"OLLAMA_ALLOW_INSECURE":       {"OLLAMA_ALLOW_INSECURE", AllowInsecure(), "Permit binding a non-loopback address without OLLAMA_API_KEY (default: off)"},
+		"OLLAMA_RATE_LIMIT":           {"OLLAMA_RATE_LIMIT", RateLimit(), "Per-client request/minute cap; 0 disables (default: 0)"},
 		"OLLAMA_SCHED_SPREAD":         {"OLLAMA_SCHED_SPREAD", SchedSpread(), "Always schedule model across all GPUs"},
 		"OLLAMA_CONTEXT_LENGTH":       {"OLLAMA_CONTEXT_LENGTH", ContextLength(), "Context length to use unless otherwise specified (default: 4k/32k/256k based on VRAM)"},
 		"OLLAMA_EDITOR":               {"OLLAMA_EDITOR", Editor(), "Path to editor for interactive prompt editing (Ctrl+G)"},

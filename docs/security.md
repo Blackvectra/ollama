@@ -1,5 +1,14 @@
 # Securing your Ollama server
 
+> **On "maximum"/"government-grade" security:** real high-assurance security
+> (e.g. the FBI's CJIS Security Policy, NIST 800-53) is mostly about the
+> *deployment environment*, not application code — network isolation, hardened
+> OS, TLS/mTLS, audited access, HSM-backed key management, continuous
+> monitoring, and physical security. The controls below harden everything that
+> lives in this software; the **Hardened deployment checklist** at the end
+> covers the environment work that no application change can do for you.
+
+
 By default Ollama is **private** — it runs on your machine and only listens on
 `localhost` (`127.0.0.1:11434`), so nothing leaves your computer and nothing on
 your network can reach it. This page covers how to keep it that way, and how to
@@ -102,7 +111,59 @@ Leave `ANTHROPIC_API_KEY` unset to keep the server local-only.
 - The UI stores your access key in the browser's `localStorage` (so you don't
   retype it). It is scoped to this origin and never embedded in the served HTML.
   Treat the machine's browser profile accordingly.
-- Model output is HTML-escaped before rendering, so a model cannot inject
-  scripts into the page.
+- Model output is HTML-escaped before rendering, and the page is served under a
+  strict **Content-Security-Policy** with a per-request script **nonce** (no
+  `'unsafe-inline'` for scripts) and `connect-src 'self'`, so a model cannot
+  inject scripts or exfiltrate data to another origin.
 - The chat proxy caps request bodies (1 MiB) and bounds the size of upstream
   error messages it reflects back.
+
+## Built-in hardening controls
+
+These are on by default or one env var away:
+
+| Control | Behavior |
+|---|---|
+| **Loopback by default** | Binds `127.0.0.1` unless you change `OLLAMA_HOST`. |
+| **Fail-closed binding** | Refuses to start when bound to a non-loopback address without `OLLAMA_API_KEY`. Override only with `OLLAMA_ALLOW_INSECURE=1`. |
+| **Bearer auth** | `OLLAMA_API_KEY` requires `Authorization: Bearer <key>` on all API routes (constant-time compare). |
+| **Auth audit log** | Every rejected request logs client IP + method + path (never the attempted key). |
+| **Rate limiting** | `OLLAMA_RATE_LIMIT=<req/min>` throttles per client IP (brute-force protection). `0` disables (default). |
+| **Security headers** | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy`, and a strict CSP. |
+| **Secrets redaction** | `OLLAMA_API_KEY` / `ANTHROPIC_API_KEY` values never print in the env listing or logs. |
+
+Example "locked down" launch:
+
+```sh
+export OLLAMA_HOST=127.0.0.1:11434
+export OLLAMA_API_KEY="$(openssl rand -hex 32)"
+export OLLAMA_ORIGINS="http://localhost:11434"
+export OLLAMA_RATE_LIMIT=120
+ollama serve
+```
+
+## Hardened deployment checklist
+
+Application controls are necessary but not sufficient. For a high-assurance
+deployment, also do the following — none of it can be done by app code:
+
+- [ ] **Network isolation** — run on an isolated/segmented network or VPN; never
+      expose the raw port to the internet.
+- [ ] **TLS/mTLS** — terminate HTTPS at a reverse proxy (nginx/Caddy/Traefik);
+      require client certificates for mutual auth where feasible.
+- [ ] **Strong, rotated key** — generate `OLLAMA_API_KEY` from a CSPRNG, store it
+      in a secrets manager/HSM, and rotate on a schedule and on any exposure.
+- [ ] **Least privilege** — run the server as a non-root user with a read-only
+      root filesystem and dropped capabilities; restrict the models directory.
+- [ ] **OS hardening** — patched host, host firewall default-deny, disk
+      encryption at rest, minimal installed packages.
+- [ ] **Monitoring & audit** — ship the auth/rate-limit logs to a SIEM, alert on
+      repeated `rejected unauthenticated API request` and `rate limit exceeded`.
+- [ ] **Data policy** — set `OLLAMA_NO_CLOUD=1` and leave `ANTHROPIC_API_KEY`
+      unset if data must never leave the environment.
+- [ ] **Physical/access control** — restrict who can reach the host and its
+      browser profiles (where the chat UI caches the access key).
+
+> Following this checklist does **not** constitute CJIS/FedRAMP/etc.
+> certification — those require formal assessment and organizational controls
+> well beyond any single tool.
