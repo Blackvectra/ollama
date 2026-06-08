@@ -134,3 +134,23 @@ func TestProviderChatUnknownModel(t *testing.T) {
 		t.Errorf("unknown provider model: got %d, want 400", w.Code)
 	}
 }
+
+func TestProviderChatRejectsOversizedBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("ANTHROPIC_API_KEY", "sk-test")
+
+	s := Server{}
+	// Body larger than maxProviderBodyBytes; MaxBytesReader should make the
+	// JSON bind fail with a 400 rather than buffering it all into memory.
+	big := `{"model":"claude-opus-4-8","messages":[{"role":"user","content":"` +
+		strings.Repeat("A", maxProviderBodyBytes+1024) + `"}]}`
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/providers/chat/completions", strings.NewReader(big))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	s.ProviderChatHandler(c)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("oversized body: got %d, want 400", w.Code)
+	}
+}

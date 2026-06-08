@@ -1882,6 +1882,13 @@ func (s *Server) GenerateRoutes(rc *ollama.Registry) (http.Handler, error) {
 		apiKeyAuthMiddleware(envconfig.ApiKey()),
 	)
 
+	// The Anthropic passthrough spends real money. If it is enabled without an
+	// access key, anyone who can reach this server can run up your Anthropic
+	// bill. Loopback binding is the default safety net; warn loudly otherwise.
+	if envconfig.AnthropicApiKey() != "" && envconfig.ApiKey() == "" {
+		slog.Warn("ANTHROPIC_API_KEY is set but OLLAMA_API_KEY is not: the Claude passthrough is unauthenticated. Keep OLLAMA_HOST on localhost, or set OLLAMA_API_KEY before exposing this server.")
+	}
+
 	// General
 	r.HEAD("/", func(c *gin.Context) { c.String(http.StatusOK, "Ollama is running") })
 	r.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "Ollama is running") })

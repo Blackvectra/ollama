@@ -89,3 +89,20 @@ Privacy tradeoff, stated plainly:
   the browser, and never printed in the `ollama serve` environment listing.
 
 Leave `ANTHROPIC_API_KEY` unset to keep the server local-only.
+
+> ⚠️ **The passthrough spends real money.** If `ANTHROPIC_API_KEY` is set but
+> `OLLAMA_API_KEY` is not, the Claude proxy is unauthenticated — anyone who can
+> reach the server can run up your Anthropic bill. The localhost default
+> protects you; if you ever bind to a non-loopback address, **set
+> `OLLAMA_API_KEY` first.** The server logs a warning at startup when this
+> combination is detected.
+
+### Notes on the built-in chat UI
+
+- The UI stores your access key in the browser's `localStorage` (so you don't
+  retype it). It is scoped to this origin and never embedded in the served HTML.
+  Treat the machine's browser profile accordingly.
+- Model output is HTML-escaped before rendering, so a model cannot inject
+  scripts into the page.
+- The chat proxy caps request bodies (1 MiB) and bounds the size of upstream
+  error messages it reflects back.

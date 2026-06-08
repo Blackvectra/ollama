@@ -35,6 +35,13 @@ var anthropicModels = []string{
 // defaultProviderMaxTokens caps the response when the client does not specify.
 const defaultProviderMaxTokens = 4096
 
+// maxProviderBodyBytes bounds the inbound request body to the proxy.
+const maxProviderBodyBytes = 1 << 20 // 1 MiB
+
+// maxUpstreamErrBytes bounds how much of an upstream error body we echo back,
+// so a large/hostile upstream response can't be reflected verbatim.
+const maxUpstreamErrBytes = 2048
+
 type providerInfo struct {
 	Name   string   `json:"name"`
 	Models []string `json:"models"`
@@ -76,6 +83,10 @@ func providerForModel(model string) string {
 // provider and streams the reply back in OpenAI SSE format, so the existing
 // chat UI consumes local and cloud models identically.
 func (s *Server) ProviderChatHandler(c *gin.Context) {
+	// Cap the request body to guard against memory-exhaustion from oversized
+	// payloads on this unauthenticated-by-default proxy path.
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxProviderBodyBytes)
+
 	var req openAIChatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -161,7 +172,7 @@ func (s *Server) anthropicChat(c *gin.Context, req openAIChatRequest) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		msg, _ := io.ReadAll(resp.Body)
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, maxUpstreamErrBytes))
 		c.JSON(resp.StatusCode, gin.H{"error": "anthropic error: " + strings.TrimSpace(string(msg))})
 		return
 	}
