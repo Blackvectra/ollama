@@ -1220,3 +1220,27 @@ func TestWaitForStream(t *testing.T) {
 		})
 	}
 }
+
+func TestChatUIRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	s := Server{}
+	h, err := s.GenerateRoutes(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/chat", nil)
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Fatalf("expected text/html content type, got %q", ct)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "Ollama Chat") || !strings.Contains(body, "/v1/chat/completions") {
+		t.Fatalf("chat UI body missing expected markers (len=%d)", len(body))
+	}
+}
